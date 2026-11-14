@@ -15,3 +15,12 @@ EMA bulutu, SSL Channel ve AlphaTrend’i tek grafikte birleştiren Pine Script 
 ## License and attribution / Lisans ve kaynak
 
 [Mozilla Public License 2.0](https://mozilla.org/MPL/2.0/). AlphaTrend concept and logic / AlphaTrend konsepti ve mantığı: Kivanc Ozbilgic. SSL: classic SSL Channel (HLV) logic.
+
+
+⚠️ Disclaimer
+
+This project is for educational and engineering research purposes only. It does not constitute financial advice. The developer is not responsible for any financial losses incurred from using this bot or its signals. Trade at your own risk.
+
+⚖️ Yasal Uyarı (Disclaimer)
+
+Bu yazılım tamamen açık kaynaklı bir mühendislik ve veri bilimi araştırma projesi (Proof of Concept) olarak tasarlanmıştır. Çıktıların hiçbiri bir ticaret sistemi teklifi veya finansal yatırım tavsiyesi (YTD) niteliği taşımaz. Finansal piyasalar doğası gereği yüksek risk içerir, projenin kullanımı sonucu doğabilecek kâr veya zararlardan kodun geliştiricileri veya katkıda bulunanlar sorumlu tutulamaz. Yazılımı kullanmadan önce daima kendi risk analizinizi ve testlerinizi gerçekleştirmeniz önerilir.
