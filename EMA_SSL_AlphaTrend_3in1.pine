@@ -1,0 +1,143 @@
+//@version=6
+// This source code is subject to the terms of the Mozilla Public License 2.0:
+// https://mozilla.org/MPL/2.0/
+// AlphaTrend concept/logic: Kivanc Ozbilgic. SSL: classic SSL Channel (HLV) logic.
+indicator("EMA Cloud + SSL Channel + AlphaTrend | 3-in-1", shorttitle="EMA+SSL+AT", overlay=true)
+
+// ─────────────────────────────────────────────────────────────
+// 1) SETTINGS
+// ─────────────────────────────────────────────────────────────
+groupEMA = "1 - EMA Cloud"
+showEMA = input.bool(true, "EMA bulutunu goster", group=groupEMA)
+emaFastLen = input.int(20, "Hizli EMA", minval=1, group=groupEMA)
+emaSlowLen = input.int(50, "Yavas EMA", minval=1, group=groupEMA)
+showEMA200 = input.bool(true, "Uzun EMA'yi goster", group=groupEMA)
+emaTrendLen = input.int(200, "Uzun EMA periyodu", minval=1, group=groupEMA)
+useEMA200Filter = input.bool(false, "Ortak sinyallerde uzun EMA filtresi", group=groupEMA)
+
+groupSSL = "2 - SSL Channel"
+showSSL = input.bool(true, "SSL Channel goster", group=groupSSL)
+sslLen = input.int(10, "SSL periyodu", minval=1, group=groupSSL)
+sslMAType = input.string("SMA", "SSL hareketli ortalama", options=["SMA", "EMA"], group=groupSSL)
+showSSLSignals = input.bool(false, "SSL kendi sinyallerini goster", group=groupSSL)
+
+groupAT = "3 - AlphaTrend"
+showAT = input.bool(true, "AlphaTrend goster", group=groupAT)
+atLen = input.int(14, "AlphaTrend periyodu", minval=1, group=groupAT)
+atMult = input.float(1.0, "ATR carpani", minval=0.1, step=0.1, group=groupAT)
+atUseRSI = input.bool(false, "MFI yerine RSI kullan (hacim yoksa)", group=groupAT)
+atSource = input.source(close, "RSI kaynagi", group=groupAT)
+showATSignals = input.bool(false, "AlphaTrend kendi sinyallerini goster", group=groupAT)
+
+groupSIG = "4 - Ortak AL / SAT"
+showCombined = input.bool(true, "3/3 ortak AL/SAT sinyallerini goster", group=groupSIG)
+closedOnly = input.bool(true, "Yalnizca mum kapanisinda sinyal", group=groupSIG)
+showDashboard = input.bool(true, "Trend tablosunu goster", group=groupSIG)
+
+// ─────────────────────────────────────────────────────────────
+// 2) EMA CLOUD
+// ─────────────────────────────────────────────────────────────
+emaFast = ta.ema(close, emaFastLen)
+emaSlow = ta.ema(close, emaSlowLen)
+emaTrend = ta.ema(close, emaTrendLen)
+emaBull = emaFast > emaSlow
+emaBear = emaFast < emaSlow
+emaCloudColor = emaBull ? color.new(color.teal, 85) : color.new(color.red, 85)
+
+pEmaFast = plot(showEMA ? emaFast : na, title="Fast EMA", color=color.aqua, linewidth=2)
+pEmaSlow = plot(showEMA ? emaSlow : na, title="Slow EMA", color=color.orange, linewidth=2)
+fill(pEmaFast, pEmaSlow, color=showEMA ? emaCloudColor : na, title="EMA Cloud")
+plot(showEMA200 ? emaTrend : na, title="Long EMA", color=color.yellow, linewidth=2)
+
+// ─────────────────────────────────────────────────────────────
+// 3) CLASSIC SSL CHANNEL
+// ─────────────────────────────────────────────────────────────
+sslHighSMA = ta.sma(high, sslLen)
+sslLowSMA = ta.sma(low, sslLen)
+sslHighEMA = ta.ema(high, sslLen)
+sslLowEMA = ta.ema(low, sslLen)
+sslHighMA = sslMAType == "EMA" ? sslHighEMA : sslHighSMA
+sslLowMA = sslMAType == "EMA" ? sslLowEMA : sslLowSMA
+
+var int sslState = 0
+sslState := close > sslHighMA ? 1 : close < sslLowMA ? -1 : nz(sslState[1], 0)
+sslUp = sslState < 0 ? sslLowMA : sslHighMA
+sslDown = sslState < 0 ? sslHighMA : sslLowMA
+sslBull = sslState == 1
+sslBear = sslState == -1
+sslBuy = sslBull and sslState[1] == -1
+sslSell = sslBear and sslState[1] == 1
+
+pSSLUp = plot(showSSL ? sslUp : na, title="SSL Up", color=color.lime, linewidth=2)
+pSSLDown = plot(showSSL ? sslDown : na, title="SSL Down", color=color.red, linewidth=2)
+sslFillColor = sslBull ? color.new(color.green, 92) : color.new(color.red, 92)
+fill(pSSLUp, pSSLDown, color=showSSL ? sslFillColor : na, title="SSL Fill")
+
+// ─────────────────────────────────────────────────────────────
+// 4) ALPHATREND (ATR + MFI / RSI)
+// ─────────────────────────────────────────────────────────────
+atATR = ta.sma(ta.tr(true), atLen)
+atMFI = ta.mfi(hlc3, atLen)
+atRSI = ta.rsi(atSource, atLen)
+atMomentum = atUseRSI ? atRSI : atMFI
+atUpper = low - atATR * atMult
+atLower = high + atATR * atMult
+
+var float alphaTrend = na
+if not na(atATR) and not na(atMomentum)
+    alphaTrend := atMomentum >= 50 ? math.max(atUpper, nz(alphaTrend[1], atUpper)) : math.min(atLower, nz(alphaTrend[1], atLower))
+
+// AlphaTrend'in orijinal sinyali: cizginin 2 bar gecikmeli haliyle kesisimi.
+atBuy = ta.crossover(alphaTrend, alphaTrend[2])
+atSell = ta.crossunder(alphaTrend, alphaTrend[2])
+var int atState = 0
+if atBuy
+    atState := 1
+else if atSell
+    atState := -1
+atBull = atState == 1
+atBear = atState == -1
+
+atMainColor = atBull ? color.lime : atBear ? color.red : color.gray
+pAT = plot(showAT ? alphaTrend : na, title="AlphaTrend", color=atMainColor, linewidth=3)
+pAT2 = plot(showAT ? alphaTrend[2] : na, title="AlphaTrend 2-bar lag", color=color.new(color.gray, 55), linewidth=1)
+atFillColor = atBull ? color.new(color.lime, 82) : color.new(color.red, 82)
+fill(pAT, pAT2, color=showAT ? atFillColor : na, title="AlphaTrend Fill")
+
+// ─────────────────────────────────────────────────────────────
+// 5) 3/3 TREND CONFIRMATION + SIGNALS
+// ─────────────────────────────────────────────────────────────
+longEMAOK = not useEMA200Filter or close > emaTrend
+shortEMAOK = not useEMA200Filter or close < emaTrend
+allBull = emaBull and sslBull and atBull and longEMAOK
+allBear = emaBear and sslBear and atBear and shortEMAOK
+barOK = not closedOnly or barstate.isconfirmed
+
+// Sadece uyumun YENI basladigi mumda sinyal olustur.
+buySignal = allBull and not allBull[1] and barOK
+sellSignal = allBear and not allBear[1] and barOK
+
+plotshape(showCombined and buySignal, title="3/3 AL", text="3/3 AL", style=shape.labelup, location=location.belowbar, color=color.green, textcolor=color.white, size=size.small)
+plotshape(showCombined and sellSignal, title="3/3 SAT", text="3/3 SAT", style=shape.labeldown, location=location.abovebar, color=color.red, textcolor=color.white, size=size.small)
+plotshape(showSSLSignals and sslBuy and barOK, title="SSL AL", text="SSL", style=shape.triangleup, location=location.belowbar, color=color.lime, textcolor=color.lime, size=size.tiny)
+plotshape(showSSLSignals and sslSell and barOK, title="SSL SAT", text="SSL", style=shape.triangledown, location=location.abovebar, color=color.red, textcolor=color.red, size=size.tiny)
+plotshape(showATSignals and atBuy and barOK, title="AlphaTrend AL", text="AT", style=shape.triangleup, location=location.belowbar, color=color.green, textcolor=color.green, size=size.tiny)
+plotshape(showATSignals and atSell and barOK, title="AlphaTrend SAT", text="AT", style=shape.triangledown, location=location.abovebar, color=color.maroon, textcolor=color.maroon, size=size.tiny)
+
+// Alarm kurarken frekansi "Once Per Bar Close" sec.
+alertcondition(buySignal, title="3/3 AL Alarmi", message="EMA + SSL + AlphaTrend: 3/3 AL | {{ticker}} | {{interval}} | {{close}}")
+alertcondition(sellSignal, title="3/3 SAT Alarmi", message="EMA + SSL + AlphaTrend: 3/3 SAT | {{ticker}} | {{interval}} | {{close}}")
+
+// ─────────────────────────────────────────────────────────────
+// 6) MINI TREND DASHBOARD
+// ─────────────────────────────────────────────────────────────
+var table dash = table.new(position.top_right, 2, 4, border_width=1)
+if showDashboard and barstate.islast
+    table.cell(dash, 0, 0, "EMA Cloud", text_color=color.white, bgcolor=color.new(color.gray, 60))
+    table.cell(dash, 1, 0, emaBull ? "YUKARI" : emaBear ? "ASAGI" : "NOTR", text_color=color.white, bgcolor=emaBull ? color.new(color.green, 20) : emaBear ? color.new(color.red, 20) : color.new(color.gray, 45))
+    table.cell(dash, 0, 1, "SSL Channel", text_color=color.white, bgcolor=color.new(color.gray, 60))
+    table.cell(dash, 1, 1, sslBull ? "YUKARI" : sslBear ? "ASAGI" : "NOTR", text_color=color.white, bgcolor=sslBull ? color.new(color.green, 20) : sslBear ? color.new(color.red, 20) : color.new(color.gray, 45))
+    table.cell(dash, 0, 2, "AlphaTrend", text_color=color.white, bgcolor=color.new(color.gray, 60))
+    table.cell(dash, 1, 2, atBull ? "YUKARI" : atBear ? "ASAGI" : "NOTR", text_color=color.white, bgcolor=atBull ? color.new(color.green, 20) : atBear ? color.new(color.red, 20) : color.new(color.gray, 45))
+    table.cell(dash, 0, 3, "ORTAK", text_color=color.white, bgcolor=color.new(color.black, 30))
+    table.cell(dash, 1, 3, allBull ? "3/3 AL" : allBear ? "3/3 SAT" : "BEKLE", text_color=color.white, bgcolor=allBull ? color.new(color.green, 10) : allBear ? color.new(color.red, 10) : color.new(color.gray, 35))
